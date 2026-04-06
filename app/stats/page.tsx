@@ -40,7 +40,9 @@ export default function StatsPage() {
     dayjs().format("YYYY-MM"),
   );
 
-  const [hiddenCategories, setHiddenCategories] = useState<Set<string>>(new Set());
+  const [hiddenCategories, setHiddenCategories] = useState<Set<string>>(
+    new Set(),
+  );
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -84,7 +86,7 @@ export default function StatsPage() {
       if (!map.has(date)) {
         map.set(date, {});
       }
-      
+
       const dateObj = map.get(date)!;
       dateObj[cat] = (dateObj[cat] || 0) + Number(e.amount);
     });
@@ -203,7 +205,9 @@ export default function StatsPage() {
                   }: {
                     name?: string;
                     percent?: number;
-                  }) => `${name || "Khác"} ${((percent || 0) * 100).toFixed(0)}%`}
+                  }) =>
+                    `${name || "Khác"} ${((percent || 0) * 100).toFixed(0)}%`
+                  }
                 >
                   {categoryData.map((entry, index) => (
                     <Cell
@@ -213,7 +217,10 @@ export default function StatsPage() {
                   ))}
                 </Pie>
                 <RechartsTooltip
-                  formatter={(value: number) => value.toLocaleString() + "đ"}
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  formatter={(value: any) =>
+                    Number(value || 0).toLocaleString() + "đ"
+                  }
                 />
               </PieChart>
             </ResponsiveContainer>
@@ -254,11 +261,18 @@ export default function StatsPage() {
                   tickLine={false}
                 />
                 <RechartsTooltip
-                  formatter={(value: number) => value.toLocaleString() + "đ"}
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  formatter={(value: any) =>
+                    Number(value || 0).toLocaleString() + "đ"
+                  }
                 />
-                <Legend 
+                <Legend
                   onClick={toggleCategory}
-                  wrapperStyle={{ cursor: 'pointer', fontSize: 12, paddingTop: 10 }}
+                  wrapperStyle={{
+                    cursor: "pointer",
+                    fontSize: 12,
+                    paddingTop: 10,
+                  }}
                 />
                 {allCategories.map((cat, index) => (
                   <Line
