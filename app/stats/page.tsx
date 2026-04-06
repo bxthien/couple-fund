@@ -15,6 +15,8 @@ import {
   Tooltip as RechartsTooltip,
   ResponsiveContainer,
   Legend,
+  BarChart,
+  Bar,
 } from "recharts";
 import dayjs from "dayjs";
 
@@ -34,7 +36,7 @@ const COLORS = [
 ];
 
 export default function StatsPage() {
-  const { expenses, fetch } = useFinance();
+  const { expenses, contributions, fetch } = useFinance();
   const [mounted, setMounted] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(() =>
     dayjs().format("YYYY-MM"),
@@ -43,6 +45,7 @@ export default function StatsPage() {
   const [hiddenCategories, setHiddenCategories] = useState<Set<string>>(
     new Set(),
   );
+  const [flowView, setFlowView] = useState<"daily" | "monthly">("daily");
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -104,6 +107,64 @@ export default function StatsPage() {
 
     return { dailyData, allCategories: Array.from(categoriesSet) };
   }, [sharedExpenses]);
+
+  // Data cho Bar Chart: Cash flow (Thu vs Chi) theo ngày hoặc tháng
+  const cashFlowChartData = useMemo(() => {
+    const map = new Map<string, { income: number; expense: number }>();
+
+    if (flowView === "daily") {
+      // Logic cũ: theo ngày trong tháng được chọn
+      sharedExpenses.forEach((e) => {
+        const date = dayjs(e.created_at).format("DD/MM");
+        if (!map.has(date)) map.set(date, { income: 0, expense: 0 });
+        map.get(date)!.expense += Number(e.amount);
+      });
+
+      const currentMonthContributions = contributions.filter(
+        (c) =>
+          c.month === selectedMonth ||
+          (!c.month && dayjs(c.created_at).format("YYYY-MM") === selectedMonth),
+      );
+
+      currentMonthContributions.forEach((c) => {
+        const date = dayjs(c.created_at).format("DD/MM");
+        if (!map.has(date)) map.set(date, { income: 0, expense: 0 });
+        map.get(date)!.income += Number(c.amount);
+      });
+    } else {
+      // Gom tất cả chi tiêu "shared_fund" theo tháng (YYYY-MM)
+      expenses
+        .filter((e) => e.source === "shared_fund")
+        .forEach((e) => {
+          const m = e.month || dayjs(e.created_at).format("YYYY-MM");
+          if (!map.has(m)) map.set(m, { income: 0, expense: 0 });
+          map.get(m)!.expense += Number(e.amount);
+        });
+
+      // Gom tất cả đóng góp theo tháng (YYYY-MM)
+      contributions.forEach((c) => {
+        const m = c.month || dayjs(c.created_at).format("YYYY-MM");
+        if (!map.has(m)) map.set(m, { income: 0, expense: 0 });
+        map.get(m)!.income += Number(c.amount);
+      });
+    }
+
+    const sortedKeys = Array.from(map.keys()).sort((a, b) => {
+      if (flowView === "daily") {
+        const d1 = parseInt(a.split("/")[0]);
+        const d2 = parseInt(b.split("/")[0]);
+        return d1 - d2;
+      }
+      return a.localeCompare(b);
+    });
+
+    return sortedKeys.map((key) => ({
+      label: flowView === "daily" ? key : dayjs(key, "YYYY-MM").format("MM/YY"),
+      key,
+      "Tiền vào": map.get(key)!.income,
+      "Tiền ra": map.get(key)!.expense,
+    }));
+  }, [flowView, sharedExpenses, expenses, contributions, selectedMonth]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const toggleCategory = (e: any) => {
@@ -228,7 +289,7 @@ export default function StatsPage() {
         )}
       </div>
 
-      <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 mb-10">
+      <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 mb-4">
         <h2 className="text-sm font-bold text-gray-600 mb-4 pl-1">
           Biến động chi tiêu theo ngày
         </h2>
@@ -293,6 +354,94 @@ export default function StatsPage() {
                   />
                 ))}
               </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+
+      {/* CASH FLOW CHART */}
+      <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 mb-10">
+        <div className="flex justify-between items-center mb-4 pl-1">
+          <h2 className="text-sm font-bold text-gray-600">
+            Dòng tiền ({flowView === "daily" ? "Theo ngày" : "Theo tháng"})
+          </h2>
+          <div className="flex bg-gray-100 p-0.5 rounded-xl border border-gray-50 shadow-inner">
+            <button
+              onClick={() => setFlowView("daily")}
+              className={`px-3 py-1 text-[10px] font-extrabold rounded-lg transition-all ${
+                flowView === "daily"
+                  ? "bg-white text-pink-500 shadow-sm"
+                  : "text-gray-400"
+              }`}
+            >
+              Ngày
+            </button>
+            <button
+              onClick={() => setFlowView("monthly")}
+              className={`px-3 py-1 text-[10px] font-extrabold rounded-lg transition-all ${
+                flowView === "monthly"
+                  ? "bg-white text-pink-500 shadow-sm"
+                  : "text-gray-400"
+              }`}
+            >
+              Tháng
+            </button>
+          </div>
+        </div>
+        {cashFlowChartData.length === 0 ? (
+          <p className="text-center text-sm text-gray-400 py-4">
+            Chưa có dữ liệu
+          </p>
+        ) : (
+          <div className="h-64 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={cashFlowChartData}
+                margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+              >
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  vertical={false}
+                  stroke="#f3f4f6"
+                />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 10, fill: "#9ca3af" }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  tickFormatter={(val: number) => `${val / 1000}k`}
+                  tick={{ fontSize: 10, fill: "#9ca3af" }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <RechartsTooltip
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  formatter={(value: any) =>
+                    Number(value || 0).toLocaleString() + "đ"
+                  }
+                  cursor={{ fill: "transparent" }}
+                />
+                <Legend
+                  wrapperStyle={{
+                    fontSize: 12,
+                    paddingTop: 10,
+                  }}
+                />
+                <Bar
+                  dataKey="Tiền vào"
+                  fill="#10b981" // emerald-500
+                  radius={[4, 4, 0, 0]}
+                  barSize={12}
+                />
+                <Bar
+                  dataKey="Tiền ra"
+                  fill="#f43f5e" // rose-500
+                  radius={[4, 4, 0, 0]}
+                  barSize={12}
+                />
+              </BarChart>
             </ResponsiveContainer>
           </div>
         )}
