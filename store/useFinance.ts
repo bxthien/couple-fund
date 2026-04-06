@@ -10,6 +10,7 @@ export interface Expense {
   paid_by: string;
   source: string;
   month: string;
+  category?: string;
   created_at?: string;
   note?: string;
   is_edited?: boolean;

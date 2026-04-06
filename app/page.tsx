@@ -5,6 +5,7 @@ import { useRealtime } from "@/hooks/useRealtime";
 import dayjs from "dayjs";
 import { calculateDebt, calculateSharedBalance } from "@/utils/calc";
 import { useFinance, USERS, UserType } from "@/store/useFinance";
+import Link from "next/link";
 
 export default function Page() {
   const {
@@ -32,6 +33,7 @@ export default function Page() {
     note?: string;
     paid_by: string;
     source?: string;
+    category?: string;
   }) => {
     if (item.source === "settlement") return; // Không cho phép sửa giao dịch thanh toán nợ tĩnh
     if (!item.id) return;
@@ -45,9 +47,11 @@ export default function Page() {
     setNote(item.note || "");
     setPaidBy(item.paid_by as UserType);
     setSource((item.source as "personal" | "shared_fund") || "personal");
+    setCategory(item.category || "Khác");
     setOpen(true);
   };
   const [amount, setAmount] = useState("");
+  const [category, setCategory] = useState("Khác");
   const [paidBy, setPaidBy] = useState<UserType>(USERS[0]);
   const [source, setSource] = useState<"personal" | "shared_fund">("personal");
   const [mode, setMode] = useState<"expense" | "contribution">("expense");
@@ -122,6 +126,7 @@ export default function Page() {
           amount: rawValue,
           paid_by: paidBy,
           source,
+          category,
           note,
         });
       } else {
@@ -136,6 +141,7 @@ export default function Page() {
           amount: rawValue,
           paid_by: paidBy,
           source,
+          category,
           month: selectedMonth,
           note,
         });
@@ -156,6 +162,7 @@ export default function Page() {
     setEditingItem(null);
     setAmount("");
     setNote("");
+    setCategory("Khác");
     setPaidBy(USERS[0]);
     setSource("personal");
     setMode("expense");
@@ -198,6 +205,7 @@ export default function Page() {
       amount: e.amount,
       paid_by: e.paid_by,
       source: e.source,
+      category: e.category,
       created_at: fixTimezone(e.created_at),
       note: e.note,
       is_edited: e.is_edited,
@@ -209,6 +217,7 @@ export default function Page() {
       amount: c.amount,
       paid_by: c.paid_by,
       source: undefined,
+      category: undefined,
       created_at: fixTimezone(c.created_at),
       note: undefined,
       is_edited: c.is_edited,
@@ -247,6 +256,21 @@ export default function Page() {
                 <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z" />
               </svg>
             </button>
+            <Link
+              href="/stats"
+              className="p-1.5 rounded-full bg-gray-50 text-gray-900 active:scale-95 transition-all hover:text-pink-500"
+              title="Thống kê"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="20"
+                height="20"
+                fill="currentColor"
+                viewBox="0 0 16 16"
+              >
+                <path d="M1 11a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1v-3zm5-4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V7zm5-5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1V2z" />
+              </svg>
+            </Link>
           </div>
           <p className="text-xs text-gray-500 font-medium tracking-wide mt-1 flex items-center gap-1">
             <span>{USERS[0]}</span>
@@ -331,6 +355,11 @@ export default function Page() {
             {netBalance < 0 && (
               <span className="text-[11px] font-semibold text-red-400 opacity-90 truncate">
                 (Nợ {Math.abs(netBalance).toLocaleString()}đ)
+              </span>
+            )}
+            {netBalance >= 0 && (
+              <span className="text-[11px] font-semibold text-red-400 opacity-90 truncate">
+                (Hông có nợ)
               </span>
             )}
           </div>
@@ -419,7 +448,7 @@ export default function Page() {
                             : "text-blue-600"
                         }
                       >
-                        {item.paid_by}
+                        {item.paid_by}{" "}
                       </span>{" "}
                       thanh toán nợ
                     </span>
@@ -432,10 +461,12 @@ export default function Page() {
                             : "text-blue-600"
                         }
                       >
+                        {" "}
                         {item.paid_by}{" "}
                       </span>{" "}
                       •{" "}
                       {item.source === "personal" ? "Tiền riêng" : "Tiền chung"}
+                      {item.category && ` • ${item.category}`}
                     </>
                   )
                 ) : (
@@ -450,7 +481,7 @@ export default function Page() {
                     >
                       {item.paid_by}
                     </span>{" "}
-                    nạp quỹ
+                    • nạp quỹ
                   </>
                 )}
               </p>
@@ -561,45 +592,31 @@ export default function Page() {
               </div>
             </div>
 
-            {/* NOTE */}
+            {/* CATEGORY & NOTE */}
             {mode === "expense" && (
               <div className="mb-4">
-                <input
-                  type="text"
-                  placeholder="Ghi chú (tùy chọn)"
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  className="w-full border p-3 rounded-xl mb-2"
-                />
-                <div className="flex flex-wrap gap-2">
+                <p className="text-sm font-bold mb-2">Danh mục</p>
+                <div className="flex flex-wrap gap-2 mb-3">
                   {[
-                    "Nhu yếu phẩm",
-                    "Ăn chơi",
-                    "Đồ gia dụng",
-                    "Mua vàng",
-                    "Quà tặng",
+                    "Ăn uống ngoài",
                     "Đi chợ",
                     "Tiền nhà",
+                    "Điện nước",
+                    "Đồ gia dụng",
+                    "Đi lại chung",
+                    "Giải trí",
+                    "Đi chơi",
+                    "Mua vàng",
+                    "Quà tặng",
+                    "Sức khỏe",
+                    "Khác",
                   ].map((tag) => {
-                    const currentNotes = note
-                      .split(",")
-                      .map((s) => s.trim())
-                      .filter(Boolean);
-                    const isSelected = currentNotes.includes(tag);
-
+                    const isSelected = category === tag;
                     return (
                       <button
                         key={tag}
                         type="button"
-                        onClick={() => {
-                          if (isSelected) {
-                            setNote(
-                              currentNotes.filter((t) => t !== tag).join(", "),
-                            );
-                          } else {
-                            setNote([...currentNotes, tag].join(", "));
-                          }
-                        }}
+                        onClick={() => setCategory(tag)}
                         className={`px-3 py-1 text-sm rounded-full ${
                           isSelected
                             ? "bg-black text-white"
@@ -611,6 +628,13 @@ export default function Page() {
                     );
                   })}
                 </div>
+                <input
+                  type="text"
+                  placeholder="Ghi chú chi tiết (tùy chọn)"
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  className="w-full border p-3 rounded-xl mb-2"
+                />
               </div>
             )}
 
