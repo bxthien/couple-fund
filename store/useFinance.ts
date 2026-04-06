@@ -12,6 +12,7 @@ export interface Expense {
   month: string;
   created_at?: string;
   note?: string;
+  is_edited?: boolean;
 }
 
 export interface Contribution {
@@ -20,6 +21,7 @@ export interface Contribution {
   paid_by: string;
   month: string;
   created_at?: string;
+  is_edited?: boolean;
 }
 
 interface FinanceState {
@@ -28,6 +30,8 @@ interface FinanceState {
   fetch: () => Promise<void>;
   addExpense: (e: Partial<Expense>) => Promise<void>;
   addContribution: (c: Partial<Contribution>) => Promise<void>;
+  updateExpense: (id: string | number, e: Partial<Expense>) => Promise<void>;
+  updateContribution: (id: string | number, c: Partial<Contribution>) => Promise<void>;
 }
 
 export const useFinance = create<FinanceState>((set) => ({
@@ -65,4 +69,27 @@ export const useFinance = create<FinanceState>((set) => ({
       contributions: [...state.contributions, ...(data || [])],
     }));
   },
+
+  updateExpense: async (id, e) => {
+    const payload = { ...e, is_edited: true };
+    const { data } = await supabase.from("expenses").update(payload).eq("id", id).select();
+    
+    if (data && data.length > 0) {
+      set((state) => ({
+        expenses: state.expenses.map((ex) => (ex.id === id ? data[0] : ex)),
+      }));
+    }
+  },
+
+  updateContribution: async (id, c) => {
+    const payload = { ...c, is_edited: true };
+    const { data } = await supabase.from("contributions").update(payload).eq("id", id).select();
+    
+    if (data && data.length > 0) {
+      set((state) => ({
+        contributions: state.contributions.map((ct) => (ct.id === id ? data[0] : ct)),
+      }));
+    }
+  },
+
 }));

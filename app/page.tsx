@@ -7,12 +7,46 @@ import { calculateDebt, calculateSharedBalance } from "@/utils/calc";
 import { useFinance, USERS, UserType } from "@/store/useFinance";
 
 export default function Page() {
-  const { expenses, contributions, fetch, addExpense, addContribution } =
-    useFinance();
+  const {
+    expenses,
+    contributions,
+    fetch,
+    addExpense,
+    addContribution,
+    updateExpense,
+    updateContribution,
+  } = useFinance();
 
   const [open, setOpen] = useState(false);
   const [showSettleConfirm, setShowSettleConfirm] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [editingItem, setEditingItem] = useState<{
+    id: string | number;
+    type: "expense" | "contribution";
+  } | null>(null);
+
+  const handleEdit = (item: {
+    id?: string | number;
+    type: string;
+    amount: number | string;
+    note?: string;
+    paid_by: string;
+    source?: string;
+  }) => {
+    if (item.source === "settlement") return; // Không cho phép sửa giao dịch thanh toán nợ tĩnh
+    if (!item.id) return;
+
+    setEditingItem({
+      id: item.id,
+      type: item.type as "expense" | "contribution",
+    });
+    setMode(item.type as "expense" | "contribution");
+    setAmount(String(item.amount));
+    setNote(item.note || "");
+    setPaidBy(item.paid_by as UserType);
+    setSource((item.source as "personal" | "shared_fund") || "personal");
+    setOpen(true);
+  };
   const [amount, setAmount] = useState("");
   const [paidBy, setPaidBy] = useState<UserType>(USERS[0]);
   const [source, setSource] = useState<"personal" | "shared_fund">("personal");
@@ -82,20 +116,36 @@ export default function Page() {
     const rawValue = Number(amount.replace(/,/g, ""));
     if (!amount || rawValue <= 0) return;
 
-    if (mode === "expense") {
-      await addExpense({
-        amount: rawValue,
-        paid_by: paidBy,
-        source,
-        month: selectedMonth,
-        note,
-      });
+    if (editingItem) {
+      if (mode === "expense") {
+        await updateExpense(editingItem.id, {
+          amount: rawValue,
+          paid_by: paidBy,
+          source,
+          note,
+        });
+      } else {
+        await updateContribution(editingItem.id, {
+          amount: rawValue,
+          paid_by: paidBy,
+        });
+      }
     } else {
-      await addContribution({
-        amount: rawValue,
-        paid_by: paidBy,
-        month: selectedMonth,
-      });
+      if (mode === "expense") {
+        await addExpense({
+          amount: rawValue,
+          paid_by: paidBy,
+          source,
+          month: selectedMonth,
+          note,
+        });
+      } else {
+        await addContribution({
+          amount: rawValue,
+          paid_by: paidBy,
+          month: selectedMonth,
+        });
+      }
     }
 
     resetForm();
@@ -103,6 +153,7 @@ export default function Page() {
 
   const resetForm = () => {
     setOpen(false);
+    setEditingItem(null);
     setAmount("");
     setNote("");
     setPaidBy(USERS[0]);
@@ -149,6 +200,7 @@ export default function Page() {
       source: e.source,
       created_at: fixTimezone(e.created_at),
       note: e.note,
+      is_edited: e.is_edited,
     })),
 
     ...currentMonthContributions.map((c) => ({
@@ -159,6 +211,7 @@ export default function Page() {
       source: undefined,
       created_at: fixTimezone(c.created_at),
       note: undefined,
+      is_edited: c.is_edited,
     })),
   ].sort((a, b) => {
     const timeA = a.created_at ? dayjs(a.created_at).valueOf() : 0;
@@ -340,12 +393,21 @@ export default function Page() {
       <div className="space-y-2">
         {history.map((item) => (
           <div
-            key={item.id}
-            className="bg-white p-3 rounded-xl shadow flex justify-between"
+            key={`${item.type}-${item.id}`}
+            onClick={() => handleEdit(item)}
+            className="bg-white p-3 rounded-xl shadow flex justify-between cursor-pointer active:scale-[0.98] transition-transform"
           >
             <div>
               {/* Title */}
-              <p className="text-sm font-medium">
+              <p className="text-sm font-medium flex items-center">
+                {item.is_edited && (
+                  <span
+                    className="text-[10px] mr-1 opacity-70"
+                    title="Đã chỉnh sửa"
+                  >
+                    ✏️{" "}
+                  </span>
+                )}
                 {item.type === "expense" ? (
                   item.source === "settlement" ? (
                     <span className="text-gray-600">
@@ -370,7 +432,7 @@ export default function Page() {
                             : "text-blue-600"
                         }
                       >
-                        {item.paid_by}
+                        {item.paid_by}{" "}
                       </span>{" "}
                       •{" "}
                       {item.source === "personal" ? "Tiền riêng" : "Tiền chung"}
@@ -405,7 +467,7 @@ export default function Page() {
 
             {/* Amount */}
             <p
-              className={`font-semibold ${
+              className={`flex items-center justify-center font-semibold ${
                 item.type === "contribution"
                   ? "text-green-600"
                   : item.paid_by === USERS[0]
@@ -430,9 +492,11 @@ export default function Page() {
 
       {/* MODAL */}
       {open && (
-        <div className="fixed inset-0 bg-black/40 flex items-end">
+        <div className="fixed inset-0 bg-black/40 flex items-end z-50">
           <div className="bg-white w-full p-4 rounded-t-3xl space-y-3">
-            <h2 className="font-bold text-lg">Thêm dữ liệu</h2>
+            <h2 className="font-bold text-lg">
+              {editingItem ? "Chỉnh sửa dữ liệu" : "Thêm dữ liệu"}
+            </h2>
 
             {/* MODE */}
             <div className="flex gap-2">
