@@ -12,6 +12,7 @@ export default function Page() {
 
   const [open, setOpen] = useState(false);
   const [showSettleConfirm, setShowSettleConfirm] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [amount, setAmount] = useState("");
   const [paidBy, setPaidBy] = useState<UserType>(USERS[0]);
   const [source, setSource] = useState<"personal" | "shared_fund">("personal");
@@ -19,8 +20,17 @@ export default function Page() {
   const [note, setNote] = useState("");
 
   const [mounted, setMounted] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState(() =>
+    dayjs().format("YYYY-MM"),
+  );
 
   useRealtime();
+
+  const handleSync = async () => {
+    setIsSyncing(true);
+    await fetch();
+    setTimeout(() => setIsSyncing(false), 800); // Tạo hiệu ứng mượt
+  };
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -32,9 +42,40 @@ export default function Page() {
     return null; // Tránh lỗi Hydration Mismatch giữa Server và Client
   }
 
+  // 💰 DATA SLICING
+  const getMonthStr = (dateStr?: string, monthField?: string) => {
+    if (monthField) return monthField;
+    if (dateStr) return dayjs(dateStr).format("YYYY-MM");
+    return dayjs().format("YYYY-MM");
+  };
+
+  const currentMonthExpenses = expenses.filter(
+    (e) => getMonthStr(e.created_at, e.month) === selectedMonth,
+  );
+  const currentMonthContributions = contributions.filter(
+    (c) => getMonthStr(c.created_at, c.month) === selectedMonth,
+  );
+
+  const previousMonthsExpenses = expenses.filter(
+    (e) => getMonthStr(e.created_at, e.month) < selectedMonth,
+  );
+  const previousMonthsContributions = contributions.filter(
+    (c) => getMonthStr(c.created_at, c.month) < selectedMonth,
+  );
+
   // 💰 CALCULATE
-  const { netBalance, totalMiaPaid, totalEthanPaid } = calculateDebt(expenses);
-  const sharedBalance = calculateSharedBalance(contributions, expenses);
+  const { netBalance } = calculateDebt(expenses); // Tổng nợ (Toàn thời gian)
+  const { totalMiaPaid, totalEthanPaid } = calculateDebt(currentMonthExpenses); // Spending cho tháng hiện tại
+
+  const carryOverBalance = calculateSharedBalance(
+    previousMonthsContributions,
+    previousMonthsExpenses,
+  );
+  const currentMonthSharedBalance = calculateSharedBalance(
+    currentMonthContributions,
+    currentMonthExpenses,
+  );
+  const finalSharedBalance = carryOverBalance + currentMonthSharedBalance;
 
   // ➕ SUBMIT
   const handleSubmit = async () => {
@@ -46,14 +87,14 @@ export default function Page() {
         amount: rawValue,
         paid_by: paidBy,
         source,
-        month: dayjs().format("YYYY-MM"),
+        month: selectedMonth,
         note,
       });
     } else {
       await addContribution({
         amount: rawValue,
         paid_by: paidBy,
-        month: dayjs().format("YYYY-MM"),
+        month: selectedMonth,
       });
     }
 
@@ -81,7 +122,7 @@ export default function Page() {
       amount: amountToPay,
       paid_by: debtor,
       source: "settlement",
-      month: dayjs().format("YYYY-MM"),
+      month: dayjs().format("YYYY-MM"), // Mặc định ghi nhận thanh toán nợ vào tháng hiện tại thực tế
       note: "Thanh toán công nợ",
     });
   };
@@ -100,7 +141,7 @@ export default function Page() {
   };
 
   const history = [
-    ...expenses.map((e) => ({
+    ...currentMonthExpenses.map((e) => ({
       id: e.id,
       type: "expense",
       amount: e.amount,
@@ -110,7 +151,7 @@ export default function Page() {
       note: e.note,
     })),
 
-    ...contributions.map((c) => ({
+    ...currentMonthContributions.map((c) => ({
       id: c.id,
       type: "contribution",
       amount: c.amount,
@@ -126,13 +167,34 @@ export default function Page() {
   });
 
   return (
-    <div className="min-h-screen bg-gray-50 px-4 pt-4 pb-20">
+    <div className="min-h-screen bg-gray-50 px-4 pt-4 pb-10">
       {/* HEADER */}
-      <div className="flex items-center justify-between mb-4 bg-white p-3 rounded-2xl shadow-sm border border-pink-50">
+      <div className="flex items-center justify-between mb-3 bg-white p-3 rounded-2xl shadow-sm border border-pink-50">
         <div>
-          <h1 className="text-2xl font-extrabold bg-linear-to-r from-pink-500 to-rose-400 bg-clip-text text-transparent drop-shadow-sm">
-            CoupleFund
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-extrabold bg-linear-to-r from-pink-500 to-rose-400 bg-clip-text text-transparent drop-shadow-sm">
+              CoupleFund
+            </h1>
+            <button
+              onClick={handleSync}
+              disabled={isSyncing}
+              className={`p-1.5 rounded-full bg-gray-50 text-gray-900 active:scale-95 transition-all ${isSyncing ? "animate-spin text-pink-500" : "hover:text-pink-500"}`}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="20"
+                height="20"
+                fill="currentColor"
+                viewBox="0 0 16 16"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"
+                />
+                <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z" />
+              </svg>
+            </button>
+          </div>
           <p className="text-xs text-gray-500 font-medium tracking-wide mt-1 flex items-center gap-1">
             <span>{USERS[0]}</span>
             <span className="text-pink-400 animate-pulse text-sm">❤</span>
@@ -144,13 +206,50 @@ export default function Page() {
             Ví chung
           </p>
           <p className="text-xl font-extrabold text-gray-800 bg-linear-to-r from-pink-500 to-rose-400 bg-clip-text text-transparent drop-shadow-sm">
-            {sharedBalance.toLocaleString()}đ
+            {finalSharedBalance.toLocaleString()}đ
           </p>
+          {carryOverBalance > 0 && (
+            <p className="text-[10px] text-green-500 font-semibold mt-0.5 whitespace-nowrap">
+              (+{carryOverBalance.toLocaleString()}đ từ tháng trước)
+            </p>
+          )}
+          {carryOverBalance < 0 && (
+            <p className="text-[10px] text-red-400 font-semibold mt-0.5 whitespace-nowrap">
+              ({carryOverBalance.toLocaleString()}đ từ tháng trước)
+            </p>
+          )}
         </div>
       </div>
 
+      {/* MONTH SELECTOR */}
+      <div className="flex items-center justify-between mb-3 bg-white/60 p-2 rounded-2xl shadow-sm border border-gray-100">
+        <button
+          onClick={() =>
+            setSelectedMonth(
+              dayjs(selectedMonth).subtract(1, "month").format("YYYY-MM"),
+            )
+          }
+          className="w-10 h-10 flex items-center justify-center rounded-xl bg-white text-gray-500 hover:text-pink-500 shadow-sm active:scale-95 transition-all text-lg"
+        >
+          ◀
+        </button>
+        <span className="font-bold text-gray-700 tracking-wide text-[15px]">
+          Tháng {dayjs(selectedMonth).format("MM/YYYY")}
+        </span>
+        <button
+          onClick={() =>
+            setSelectedMonth(
+              dayjs(selectedMonth).add(1, "month").format("YYYY-MM"),
+            )
+          }
+          className="w-10 h-10 flex items-center justify-center rounded-xl bg-white text-gray-500 hover:text-pink-500 shadow-sm active:scale-95 transition-all text-lg"
+        >
+          ▶
+        </button>
+      </div>
+
       {/* 👤 USERS */}
-      <div className="grid grid-cols-2 gap-3 mb-4">
+      <div className="grid grid-cols-2 gap-3 mb-3">
         <div className="bg-white rounded-2xl p-4 shadow flex flex-col justify-center">
           <p className="text-sm text-pink-400 font-medium mb-1">{USERS[0]}</p>
           <div className="flex items-baseline gap-1 flex-wrap">
@@ -160,6 +259,11 @@ export default function Page() {
             {netBalance > 0 && (
               <span className="text-[11px] font-semibold text-red-400 opacity-90 truncate">
                 (Nợ {netBalance.toLocaleString()}đ)
+              </span>
+            )}
+            {netBalance <= 0 && (
+              <span className="text-[11px] font-semibold text-red-400 opacity-90 truncate">
+                (Hông có nợ)
               </span>
             )}
           </div>
@@ -180,21 +284,35 @@ export default function Page() {
         </div>
       </div>
 
-      <div className="flex flex-row justify-between items-center p-3 mb-4 bg-amber-200 rounded-xl font-bold">
+      <div className="flex flex-row justify-between items-center p-3 mb-3 bg-white rounded-2xl shadow-sm border border-pink-50">
         <div className="flex-1">
           {netBalance === 0 ? (
-            <p className="text-green-600">Đã cân bằng</p>
+            <div className="flex items-center gap-2">
+              <span className="w-8 h-8 rounded-full bg-green-50 flex items-center justify-center text-green-500">
+                ✨
+              </span>
+              <p className="text-sm font-bold text-gray-500">Không có nợ nần</p>
+            </div>
           ) : (
             <>
               {netBalance > 0 && (
-                <p className="text-red-500">
-                  {USERS[0]} nợ {USERS[1]} {netBalance.toLocaleString()}đ
+                <p className="text-sm font-medium text-gray-600">
+                  <span className="text-pink-500 font-bold">{USERS[0]}</span> nợ{" "}
+                  <span className="text-blue-500 font-bold">{USERS[1]}</span>
+                  <br />
+                  <span className="text-rose-500 font-extrabold text-lg tracking-tight">
+                    {netBalance.toLocaleString()}đ
+                  </span>
                 </p>
               )}
               {netBalance < 0 && (
-                <p className="text-blue-500">
-                  {USERS[1]} nợ {USERS[0]}{" "}
-                  {Math.abs(netBalance).toLocaleString()}đ
+                <p className="text-sm font-medium text-gray-600">
+                  <span className="text-blue-500 font-bold">{USERS[1]}</span> nợ{" "}
+                  <span className="text-pink-500 font-bold">{USERS[0]}</span>
+                  <br />
+                  <span className="text-rose-500 font-extrabold text-lg tracking-tight">
+                    {Math.abs(netBalance).toLocaleString()}đ
+                  </span>
                 </p>
               )}
             </>
@@ -203,11 +321,19 @@ export default function Page() {
         {netBalance !== 0 && (
           <button
             onClick={() => setShowSettleConfirm(true)}
-            className="ml-3 px-5 py-2 bg-black text-white rounded-full text-sm font-medium shadow active:bg-gray-800 whitespace-nowrap"
+            className="ml-3 px-6 py-2.5 bg-linear-to-r from-pink-500 to-rose-400 text-white rounded-full text-sm font-bold shadow-md shadow-pink-200 active:scale-95 transition-all whitespace-nowrap"
           >
             Thanh toán
           </button>
         )}
+      </div>
+
+      <div className="flex items-center gap-3 mt-4 mb-3 opacity-80">
+        <div className="h-px flex-1 bg-gray-200"></div>
+        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+          Lịch sử hoạt động
+        </p>
+        <div className="h-px flex-1 bg-gray-200"></div>
       </div>
 
       {/* 📜 HISTORY */}
