@@ -1,6 +1,9 @@
 import { create } from "zustand";
 import { supabase } from "@/lib/supabase";
 
+export const USERS = ["Mia", "Ethan"] as const;
+export type UserType = typeof USERS[number];
+
 export interface Expense {
   id?: string | number;
   amount: number;
@@ -8,6 +11,7 @@ export interface Expense {
   source: string;
   month: string;
   created_at?: string;
+  note?: string;
 }
 
 export interface Contribution {
