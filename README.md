@@ -68,4 +68,4 @@ Mở [http://localhost:3000](http://localhost:3000) trên trình duyệt để t
 ---
 
 ## 📄 License
-Ứng dụng được phát triển bởi [Thiên](https://github.com/bxthien) cho mục đích sử dụng cá nhân và học tập.
+Ứng dụng được phát triển bởi [Ethan](https://github.com/bxthien) cho mục đích sử dụng cá nhân và học tập.
