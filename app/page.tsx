@@ -26,6 +26,14 @@ export default function Page() {
     type: "expense" | "contribution";
   } | null>(null);
 
+  const [errorModal, setErrorModal] = useState<{
+    show: boolean;
+    title: string;
+    message: string;
+    balance?: number;
+    required?: number;
+  }>({ show: false, title: "", message: "" });
+
   const handleEdit = (item: {
     id?: string | number;
     type: string;
@@ -133,9 +141,14 @@ export default function Page() {
       }
 
       if (rawValue > currentBalance) {
-        alert(
-          `⚠️ QUỸ CHUNG KHÔNG ĐỦ TIỀN!\n\nSố dư hiện tại: ${currentBalance.toLocaleString()}đ\nSố tiền cần chi: ${rawValue.toLocaleString()}đ\n\nVui lòng nạp thêm quỹ trước khi thực hiện giao dịch này.`,
-        );
+        setErrorModal({
+          show: true,
+          title: "Quỹ chung không đủ",
+          message:
+            "Số dư hiện tại của quỹ không đủ để thực hiện khoản chi này. Hãy nạp thêm quỹ trước nhé!",
+          balance: currentBalance,
+          required: rawValue,
+        });
         return;
       }
     }
@@ -751,6 +764,57 @@ export default function Page() {
                 className="flex-1 p-3 bg-black text-white font-semibold rounded-xl shadow-lg active:scale-95 transition-transform"
               >
                 Đồng ý
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ERROR MODAL (Insufficient Fund) */}
+      {errorModal.show && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-6 z-50 animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-sm rounded-[32px] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300">
+            <div className="bg-rose-50 p-8 flex flex-col items-center text-center">
+              <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-sm mb-4 border-4 border-rose-100">
+                <span className="text-4xl">💸</span>
+              </div>
+              <h2 className="text-xl font-extrabold text-rose-600 uppercase tracking-tight">
+                {errorModal.title}
+              </h2>
+              <p className="text-gray-500 text-sm mt-2 leading-relaxed">
+                {errorModal.message}
+              </p>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="flex flex-col gap-3">
+                <div className="flex justify-between items-center p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                  <span className="text-xs font-bold text-gray-400 uppercase">
+                    Số dư hiện có
+                  </span>
+                  <span className="text-lg font-extrabold text-gray-700">
+                    {errorModal.balance?.toLocaleString()}đ
+                  </span>
+                </div>
+                <div className="flex justify-between items-center p-4 bg-rose-50/50 rounded-2xl border border-rose-100">
+                  <span className="text-xs font-bold text-rose-400 uppercase">
+                    Cần thêm
+                  </span>
+                  <span className="text-lg font-extrabold text-rose-600">
+                    {Math.max(
+                      0,
+                      (errorModal.required || 0) - (errorModal.balance || 0),
+                    ).toLocaleString()}
+                    đ
+                  </span>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setErrorModal({ ...errorModal, show: false })}
+                className="w-full py-4 bg-gray-900 text-white rounded-2xl font-bold shadow-lg shadow-gray-200 active:scale-95 transition-all text-sm"
+              >
+                Đã hiểu
               </button>
             </div>
           </div>
