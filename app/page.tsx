@@ -120,6 +120,26 @@ export default function Page() {
     const rawValue = Number(amount.replace(/,/g, ""));
     if (!amount || rawValue <= 0) return;
 
+    // 🚩 Kiểm tra số dư quỹ chung nếu dùng Tiền chung
+    if (mode === "expense" && source === "shared_fund") {
+      let currentBalance = finalSharedBalance;
+
+      // Nếu đang sửa một khoản Tiền chung, ta cộng ngược lại số tiền cũ vào balance hiện tại để kiểm tra
+      if (editingItem && editingItem.type === "expense") {
+        const oldExpense = expenses.find((e) => e.id === editingItem.id);
+        if (oldExpense && oldExpense.source === "shared_fund") {
+          currentBalance += Number(oldExpense.amount);
+        }
+      }
+
+      if (rawValue > currentBalance) {
+        alert(
+          `⚠️ QUỸ CHUNG KHÔNG ĐỦ TIỀN!\n\nSố dư hiện tại: ${currentBalance.toLocaleString()}đ\nSố tiền cần chi: ${rawValue.toLocaleString()}đ\n\nVui lòng nạp thêm quỹ trước khi thực hiện giao dịch này.`,
+        );
+        return;
+      }
+    }
+
     if (editingItem) {
       if (mode === "expense") {
         await updateExpense(editingItem.id, {
