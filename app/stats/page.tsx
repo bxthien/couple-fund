@@ -53,11 +53,11 @@ export default function StatsPage() {
     fetch();
   }, [fetch]);
 
-  // Lọc chi tiêu "chung" trong tháng được chọn
-  const sharedExpenses = useMemo(() => {
+  // Lọc chi tiêu trong tháng được chọn (bao gồm cả chung và riêng, loại bỏ thanh toán nợ)
+  const filteredExpenses = useMemo(() => {
     return expenses.filter(
       (e) =>
-        e.source === "shared_fund" && // chi tiêu chung
+        e.source !== "settlement" &&
         (e.month === selectedMonth ||
           (!e.month &&
             dayjs(e.created_at).format("YYYY-MM") === selectedMonth)),
@@ -67,21 +67,21 @@ export default function StatsPage() {
   // Data cho Pie Chart: Tổng chi tiêu theo Category
   const categoryData = useMemo(() => {
     const map = new Map<string, number>();
-    sharedExpenses.forEach((e) => {
+    filteredExpenses.forEach((e) => {
       const cat = e.category || "Khác";
       map.set(cat, (map.get(cat) || 0) + Number(e.amount));
     });
     return Array.from(map.entries())
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value);
-  }, [sharedExpenses]);
+  }, [filteredExpenses]);
 
   // Data cho Line Chart: Biến động chi tiêu theo ngày theo từng danh mục
   const { dailyData, allCategories } = useMemo(() => {
     const map = new Map<string, Record<string, number>>();
     const categoriesSet = new Set<string>();
 
-    sharedExpenses.forEach((e) => {
+    filteredExpenses.forEach((e) => {
       const date = dayjs(e.created_at).format("DD/MM");
       const cat = e.category || "Khác";
       categoriesSet.add(cat);
@@ -106,18 +106,26 @@ export default function StatsPage() {
     }));
 
     return { dailyData, allCategories: Array.from(categoriesSet) };
-  }, [sharedExpenses]);
+  }, [filteredExpenses]);
 
   // Data cho Bar Chart: Cash flow (Thu vs Chi) theo ngày hoặc tháng
   const cashFlowChartData = useMemo(() => {
-    const map = new Map<string, { income: number; expense: number }>();
+    const map = new Map<
+      string,
+      { income: number; shared_expense: number; personal_expense: number }
+    >();
 
     if (flowView === "daily") {
-      // Logic cũ: theo ngày trong tháng được chọn
-      sharedExpenses.forEach((e) => {
+      // Tiền ra (Shared & Personal) theo ngày trong tháng được chọn
+      filteredExpenses.forEach((e) => {
         const date = dayjs(e.created_at).format("DD/MM");
-        if (!map.has(date)) map.set(date, { income: 0, expense: 0 });
-        map.get(date)!.expense += Number(e.amount);
+        if (!map.has(date))
+          map.set(date, { income: 0, shared_expense: 0, personal_expense: 0 });
+        if (e.source === "shared_fund") {
+          map.get(date)!.shared_expense += Number(e.amount);
+        } else {
+          map.get(date)!.personal_expense += Number(e.amount);
+        }
       });
 
       const currentMonthContributions = contributions.filter(
@@ -128,23 +136,30 @@ export default function StatsPage() {
 
       currentMonthContributions.forEach((c) => {
         const date = dayjs(c.created_at).format("DD/MM");
-        if (!map.has(date)) map.set(date, { income: 0, expense: 0 });
+        if (!map.has(date))
+          map.set(date, { income: 0, shared_expense: 0, personal_expense: 0 });
         map.get(date)!.income += Number(c.amount);
       });
     } else {
-      // Gom tất cả chi tiêu "shared_fund" theo tháng (YYYY-MM)
+      // Gom tất cả chi tiêu (loại bỏ settlement) theo tháng (YYYY-MM)
       expenses
-        .filter((e) => e.source === "shared_fund")
+        .filter((e) => e.source !== "settlement")
         .forEach((e) => {
           const m = e.month || dayjs(e.created_at).format("YYYY-MM");
-          if (!map.has(m)) map.set(m, { income: 0, expense: 0 });
-          map.get(m)!.expense += Number(e.amount);
+          if (!map.has(m))
+            map.set(m, { income: 0, shared_expense: 0, personal_expense: 0 });
+          if (e.source === "shared_fund") {
+            map.get(m)!.shared_expense += Number(e.amount);
+          } else {
+            map.get(m)!.personal_expense += Number(e.amount);
+          }
         });
 
       // Gom tất cả đóng góp theo tháng (YYYY-MM)
       contributions.forEach((c) => {
         const m = c.month || dayjs(c.created_at).format("YYYY-MM");
-        if (!map.has(m)) map.set(m, { income: 0, expense: 0 });
+        if (!map.has(m))
+          map.set(m, { income: 0, shared_expense: 0, personal_expense: 0 });
         map.get(m)!.income += Number(c.amount);
       });
     }
@@ -162,9 +177,10 @@ export default function StatsPage() {
       label: flowView === "daily" ? key : dayjs(key, "YYYY-MM").format("MM/YY"),
       key,
       "Tiền vào": map.get(key)!.income,
-      "Tiền ra": map.get(key)!.expense,
+      "Chi Quỹ": map.get(key)!.shared_expense,
+      "Chi Riêng": map.get(key)!.personal_expense,
     }));
-  }, [flowView, sharedExpenses, expenses, contributions, selectedMonth]);
+  }, [flowView, filteredExpenses, expenses, contributions, selectedMonth]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const toggleCategory = (e: any) => {
@@ -233,7 +249,8 @@ export default function StatsPage() {
           Tổng chi tiêu chung tháng
         </p>
         <p className="text-3xl font-extrabold bg-linear-to-r from-pink-500 to-rose-400 bg-clip-text text-transparent drop-shadow-sm">
-          {sharedExpenses
+          {filteredExpenses
+            .filter((e) => e.source !== "settlement")
             .reduce((sum, e) => sum + Number(e.amount), 0)
             .toLocaleString()}
           đ
@@ -436,8 +453,14 @@ export default function StatsPage() {
                   barSize={12}
                 />
                 <Bar
-                  dataKey="Tiền ra"
+                  dataKey="Chi Quỹ"
                   fill="#f43f5e" // rose-500
+                  radius={[4, 4, 0, 0]}
+                  barSize={12}
+                />
+                <Bar
+                  dataKey="Chi Riêng"
+                  fill="#3b82f6" // blue-500
                   radius={[4, 4, 0, 0]}
                   barSize={12}
                 />
